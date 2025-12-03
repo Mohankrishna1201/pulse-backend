@@ -1,0 +1,9 @@
+.history
+node_modules
+.env
+
+uploads/*
+
+!uploads/frames/
+uploads/frames/*
+!uploads/frames/.gitkeep
