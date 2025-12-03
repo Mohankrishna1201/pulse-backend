@@ -97,10 +97,8 @@ class VideoController {
       // Build query with multi-tenant isolation (by organization)
       const query = {};
       
-      // Multi-tenant: Users see only videos from their organization, admins see all
-      if (req.user.role !== 'admin') {
-        query.organization = req.user.organization;
-      }
+      // Multi-tenant: All users (including admins) see only videos from their organization
+      query.organization = req.user.organization;
 
       // Apply filters
       if (status) query.status = status;
@@ -158,9 +156,9 @@ class VideoController {
         return res.status(404).json({ error: 'Video not found' });
       }
 
-      // Multi-tenant: Check if user has access to this video
-      if (req.user.role !== 'admin' && video.userId._id.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ error: 'Access denied. You can only view your own videos.' });
+      // Multi-tenant: Check if user's organization matches video's organization
+      if (video.organization !== req.user.organization) {
+        return res.status(403).json({ error: 'Access denied. Video not found in your organization.' });
       }
 
       res.json({ video });
@@ -182,9 +180,9 @@ class VideoController {
         return res.status(404).json({ error: 'Video not found' });
       }
 
-      // Multi-tenant: Check if user has access to this video
-      if (req.user.role !== 'admin' && video.userId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ error: 'Access denied. You can only stream your own videos.' });
+      // Multi-tenant: Check if user's organization matches video's organization
+      if (video.organization !== req.user.organization) {
+        return res.status(403).json({ error: 'Access denied. Video not found in your organization.' });
       }
 
       if (video.status !== 'completed') {
@@ -244,9 +242,9 @@ class VideoController {
         return res.status(404).json({ error: 'Video not found' });
       }
 
-      // Multi-tenant: Check if user has access to this video
-      if (req.user.role !== 'admin' && video.userId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ error: 'Access denied.' });
+      // Multi-tenant: Check if user's organization matches video's organization
+      if (video.organization !== req.user.organization) {
+        return res.status(403).json({ error: 'Access denied. Video not found in your organization.' });
       }
 
       // Check if frames directory exists
@@ -345,14 +343,14 @@ class VideoController {
         return res.status(404).json({ error: 'Video not found' });
       }
 
-      // Multi-tenant: Check if user has access to delete this video
-      // Only editors/admins can delete, and they must own the video (unless admin)
-      if (req.user.role === 'viewer') {
-        return res.status(403).json({ error: 'Viewers cannot delete videos' });
+      // Multi-tenant: Check if user's organization matches video's organization
+      if (video.organization !== req.user.organization) {
+        return res.status(403).json({ error: 'Access denied. Video not found in your organization.' });
       }
 
+      // Only the video owner or admins in the same org can delete
       if (req.user.role !== 'admin' && video.userId.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ error: 'Access denied. You can only delete your own videos.' });
+        return res.status(403).json({ error: 'Access denied. Only admins or video owners can delete videos.' });
       }
 
       // Delete file from filesystem
@@ -377,11 +375,10 @@ class VideoController {
   // Get processing statistics
   getStats = async (req, res) => {
     try {
-      // Multi-tenant: Filter by organization (tenant)
-      const matchCriteria = {};
-      if (req.user.role !== 'admin') {
-        matchCriteria.organization = req.user.organization;
-      }
+      // Multi-tenant: Filter by organization (all users see only their org stats)
+      const matchCriteria = {
+        organization: req.user.organization
+      };
 
       const stats = await Video.aggregate([
         { $match: matchCriteria },
@@ -423,7 +420,7 @@ class VideoController {
           flagged: 0,
           totalSize: 0
         },
-        organization: req.user.role === 'admin' ? 'all' : req.user.organization
+        organization: req.user.organization
       });
 
     } catch (error) {
